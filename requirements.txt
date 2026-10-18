@@ -1,0 +1,14 @@
+Flask==3.1.0
+python-dotenv==1.2.4
+PyMySQL[rsa]==1.2.3
+selenium==4.51.0
+
+# Data stack for Python 3.11 and Spark 3.x.
+numpy==1.26.4
+pandas==2.2.3
+pyspark==3.5.9
+scikit-learn==1.5.2
+mlxtend==0.23.4
+joblib==1.6.0
+
+APScheduler==3.11.3

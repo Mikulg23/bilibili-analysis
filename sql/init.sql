@@ -1,0 +1,18 @@
+CREATE DATABASE IF NOT EXISTS `bilibili_analysis`
+    CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE `bilibili_analysis`;
+
+-- 日期、关键词对应的数据表按此模板创建，不存放演示数据。
+CREATE TABLE IF NOT EXISTS `video_data_template` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    `title` TEXT NOT NULL,
+    `url` VARCHAR(255) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `up` VARCHAR(255) NOT NULL,
+    `play` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    `like` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    `coin` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    `favorite` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    `share` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY `uq_video_url` (`url`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

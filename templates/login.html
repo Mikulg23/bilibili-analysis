@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>登录 · BiliScope 数据分析</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/login.js') }}" defer></script>
+</head>
+<body class="login-page">
+  <main class="login-layout">
+    <section class="login-intro" aria-label="项目介绍">
+      <a class="brand" href="/login"><span class="brand-mark" aria-hidden="true">B</span><span>BiliScope<span class="brand-caption">视频数据洞察平台</span></span></a>
+      <div class="intro-copy">
+        <span class="eyebrow">DATA / INSIGHT / KNOWLEDGE</span>
+        <h1>从视频数据，<br>发现更多<span>可能。</span></h1>
+        <p>连接数据采集、统计分析与智能挖掘，<br>让每一份数据，都有清晰的表达。</p>
+        <div class="data-illustration" aria-hidden="true">
+          <div class="illustration-top"><span>数据探索工作台</span><span class="tiny-dot"></span></div>
+          <div class="illustration-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="illustration-bottom"><span>COLLECT</span><span>ANALYZE</span><span>DISCOVER</span></div>
+        </div>
+      </div>
+      <p class="intro-footer">大数据开发综合实践 · 多技术栈数据分析</p>
+    </section>
+    <section class="login-panel">
+      <div class="login-card">
+        <span class="tag">工作台登录</span>
+        <h2>欢迎回来</h2>
+        <p class="muted">登录后进入你的视频数据工作台</p>
+        <form id="login-form">
+          <label for="username">账号</label>
+          <input id="username" name="username" autocomplete="username" placeholder="请输入账号" required maxlength="80">
+          <label for="password">密码</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" placeholder="请输入密码" required maxlength="128">
+          <p id="login-message" class="message" role="status" aria-live="polite" hidden></p>
+          <button class="button primary login-submit" type="submit">登录工作台 <span aria-hidden="true">→</span></button>
+        </form>
+        <div class="preview-entry"><span>前端界面已开放预览</span><a href="/dashboard">预览管理界面 <span aria-hidden="true">↗</span></a></div>
+        <p class="login-note">当前为本地前端预览，登录服务尚未接入。预览入口不代表已登录。</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

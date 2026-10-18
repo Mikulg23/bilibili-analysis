@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>数据分析 · BiliScope</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js" defer></script>
+  <script src="{{ url_for('static', filename='js/charts.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</head>
+<body data-dashboard>
+  <svg class="svg-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="icon-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="icon-collect" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 15v5h16v-5"/></symbol>
+    <symbol id="icon-clean" viewBox="0 0 24 24"><path d="m15 3 6 6-9 9-6-6zm-9 9-3 7 2 2 7-3M8 16l-3 5"/></symbol>
+    <symbol id="icon-chart" viewBox="0 0 24 24"><path d="M4 3v17h17M8 15v-4m5 4V6m5 9V9"/></symbol>
+    <symbol id="icon-mine" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2.5"/><circle cx="18" cy="5" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m7.2 10.8 8.6-4.6m-8.6 7 8.6 4.6M18 7.5v9"/></symbol>
+    <symbol id="icon-ai" viewBox="0 0 24 24"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></symbol>
+    <symbol id="icon-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="icon-exit" viewBox="0 0 24 24"><path d="M9 4H4v16h5m5-13 5 5-5 5m-6-5h11"/></symbol>
+  </defs></svg>
+  <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
+  <aside class="sidebar" id="sidebar" aria-label="功能菜单">
+    <a class="brand" href="/dashboard"><span class="brand-mark" aria-hidden="true">B</span><span>BiliScope<span class="brand-caption">视频数据洞察平台</span></span></a>
+    <div class="workspace-label">WORKSPACE <span>工作空间</span></div>
+    <nav class="nav-list" aria-label="主导航">
+      <button data-page="collect"><svg class="icon"><use href="#icon-collect"/></svg>数据采集<span class="nav-number">01</span></button>
+      <button data-page="preprocess"><svg class="icon"><use href="#icon-clean"/></svg>数据预处理<span class="nav-number">02</span></button>
+      <button data-page="analysis" class="active" aria-current="page"><svg class="icon"><use href="#icon-chart"/></svg>数据分析<span class="nav-number">03</span></button>
+      <button data-page="mining"><svg class="icon"><use href="#icon-mine"/></svg>数据挖掘<span class="nav-number">04</span></button>
+      <button data-page="knowledge"><svg class="icon"><use href="#icon-ai"/></svg>AI 知识库<span class="small-badge">选做</span></button>
+    </nav>
+    <div class="sidebar-footer"><div class="preview-status"><span class="tiny-dot"></span>本地界面预览</div><p>业务服务等待接入<br>当前页面不具备访问保护</p><a class="sidebar-return" href="/login"><svg class="icon"><use href="#icon-exit"/></svg>返回登录页</a></div>
+  </aside>
+  <div class="main-shell">
+    <header class="topbar">
+      <div class="breadcrumb"><button id="menu-toggle" class="icon-button mobile-only" aria-label="展开功能菜单" aria-controls="sidebar" aria-expanded="false"><svg class="icon"><use href="#icon-menu"/></svg></button><span class="breadcrumb-root">工作空间</span><span class="slash">/</span><span id="breadcrumb-title">数据分析</span></div>
+      <div class="account"><span class="preview-pill">预览模式</span><span class="avatar">A</span><span>管理员预览</span><button id="logout-button" class="icon-button" aria-label="退出登录"><svg class="icon"><use href="#icon-exit"/></svg></button></div>
+    </header>
+    <main class="content">
+      <div class="page-heading"><div><div class="eyebrow" id="page-eyebrow">DATA ANALYTICS</div><h1 id="page-title">数据分析</h1><p id="page-description" class="muted">从多维度观察视频表现，让数据洞察更直观。</p></div><span class="section-mark" aria-hidden="true">03 / ANALYZE</span></div>
+      <section class="filter-bar" aria-label="数据筛选">
+        <div class="filter-label"><svg class="icon"><use href="#icon-grid"/></svg><strong>数据范围</strong></div>
+        <div class="filter-fields"><label for="filter-date">采集日期</label><input id="filter-date" type="date" data-filter="date" required><label for="filter-keyword">关键词</label><input id="filter-keyword" type="search" data-filter="keyword" placeholder="输入采集关键词" maxlength="100"></div>
+        <span class="filter-hint">默认查看昨日数据</span>
+      </section>
+      <p id="global-message" class="message" role="status" aria-live="polite" hidden></p>
+      <p id="chart-library-warning" class="message warning" role="status" hidden>图表库加载失败，请检查网络后刷新页面。其他功能仍可查看。</p>
+
+      <section class="page-section" id="page-analysis" aria-label="数据分析">
+        <div class="stats-grid">
+          <article class="stat-card"><div><span>视频总数</span><svg class="icon"><use href="#icon-grid"/></svg></div><strong data-value="video_count">—</strong><small>当前筛选范围内的视频</small></article>
+          <article class="stat-card"><div><span>总播放量</span><svg class="icon"><use href="#icon-chart"/></svg></div><strong data-value="total_play">—</strong><small>累计视频播放次数</small></article>
+          <article class="stat-card"><div><span>总互动量</span><svg class="icon"><use href="#icon-mine"/></svg></div><strong data-value="total_interactions">—</strong><small>点赞 / 投币 / 收藏 / 转发</small></article>
+          <article class="stat-card"><div><span>UP 主数量</span><svg class="icon"><use href="#icon-collect"/></svg></div><strong data-value="up_count">—</strong><small>去重后的视频创作者</small></article>
+        </div>
+        <div class="section-toolbar"><div><h2>多维度数据洞察</h2><span class="muted small">基于所选日期与关键词的数据</span></div><button class="button primary" id="load-analysis">加载分析数据 <span aria-hidden="true">↗</span></button></div>
+        <p class="message" id="analysis-message" role="status" aria-live="polite" hidden></p>
+        <div class="chart-grid">
+          <article class="panel chart-panel"><div class="panel-heading"><h3>播放量 TOP 10</h3><span class="chart-tag">柱状图</span></div><p class="panel-description">播放表现领先的视频</p><div id="chart-top10" class="chart-slot" role="img" aria-label="视频播放量前十柱状图"></div></article>
+          <article class="panel chart-panel"><div class="panel-heading"><h3>视频互动占比</h3><span class="chart-tag">环形图</span></div><p class="panel-description">点赞、投币、收藏与转发分布</p><div id="chart-interaction" class="chart-slot" role="img" aria-label="视频互动占比环形图"></div></article>
+          <article class="panel chart-panel"><div class="panel-heading"><h3>标题长度与播放量</h3><span class="chart-tag">折线图</span></div><p class="panel-description">按标题字数汇总播放量 · 单位：万</p><div id="chart-title" class="chart-slot" role="img" aria-label="标题长度与总播放量折线图"></div></article>
+          <article class="panel chart-panel"><div class="panel-heading"><h3>点赞与投币分布</h3><span class="chart-tag">散点图</span></div><p class="panel-description">观察两项互动指标之间的关系</p><div id="chart-scatter" class="chart-slot" role="img" aria-label="点赞与投币散点图"></div></article>
+        </div>
+      </section>
+
+      <section class="page-section" id="page-collect" aria-label="数据采集" hidden>
+        <div class="two-column"><article class="panel"><div class="panel-heading"><h2>手动采集</h2><span class="tag">本机采集</span></div><p class="panel-description">按关键词采集视频并保存本地 CSV；清洗后再上传 HDFS。</p><form id="collect-form" class="form-grid"><div><label for="collect-keyword">搜索关键词</label><input id="collect-keyword" data-filter="keyword" placeholder="例如：数据分析" required maxlength="100"></div><div><label for="collect-date">采集日期（批次）</label><input id="collect-date" data-filter="date" type="date" required></div><div><label for="collect-pages">采集页数</label><input id="collect-pages" name="pages" type="number" value="10" min="1" max="100" step="1" required></div><div class="form-action"><button class="button primary" type="submit">开始采集 <span aria-hidden="true">→</span></button></div></form></article><article class="panel schedule-card"><span class="eyebrow">SCHEDULE</span><h2>每日自动采集</h2><p class="muted">自动采集暂未实现；当前仅支持手动启动采集。</p><div class="schedule-time">00:00 <span>每日</span></div><span class="status-badge">定时任务尚未接入</span><p class="small muted">日期只用于标记采集批次，不筛选视频发布时间。</p></article></div>
+        <p class="message" id="collect-message" role="status" aria-live="polite" hidden></p>
+        <article class="panel">
+          <div class="panel-heading"><h2>当前采集任务</h2><div class="button-group"><span class="status-badge" id="collection-state">尚未开始</span><button class="button danger" id="stop-collection" type="button" disabled>停止采集</button><button class="button" id="refresh-collection" type="button">查看当前任务</button></div></div>
+          <p class="panel-description" id="collection-progress">启动后显示页数、累计数量与失败数量，最多预览 20 条记录。</p>
+          <p class="muted small" id="collection-file">CSV 保存到 data/raw/，本模块不写入 MySQL 或 HDFS。</p>
+          <p class="muted small">当前为本机预览，尚未接入管理员登录鉴权，请勿对外开放服务。</p>
+        </article>
+        <article class="panel"><div class="panel-heading"><h2>采集结果预览</h2><span class="muted small">已采集 <strong data-value="collect_count">—</strong> 条</span></div><div class="table-wrap" tabindex="0" aria-label="采集结果表格"><table><thead><tr><th>视频标题</th><th>视频 URL</th><th>UP 主</th><th>播放量</th><th>点赞数</th><th>投币数</th><th>收藏数</th><th>转发数</th></tr></thead><tbody id="collect-rows"></tbody></table></div></article>
+      </section>
+
+      <section class="page-section" id="page-preprocess" aria-label="数据预处理" hidden>
+        <article class="panel"><div class="panel-heading"><h2>标准清洗流程</h2><span class="tag">Pandas</span></div><p class="panel-description">按采集日期清洗，关键词留空合并全部 CSV；清洗后写入本机 MySQL 并上传 HDFS。</p><ol class="pipeline"><li><span>01</span><strong>缺失值处理</strong><small>补全缺失字段</small></li><li><span>02</span><strong>数值单位换算</strong><small>万 / 千转为数值</small></li><li><span>03</span><strong>异常值处理</strong><small>IQR 边界截尾，不删行</small></li><li><span>04</span><strong>标题文本清洗</strong><small>规范文本内容</small></li><li><span>05</span><strong>URL 去重</strong><small>移除重复视频</small></li></ol><div class="panel-bottom"><span class="muted small">缺失数值填 0；日期和关键词确定处理范围，存储状态单独反馈。</span><button class="button primary" id="run-preprocess">执行数据预处理 →</button></div></article>
+        <p class="message" id="preprocess-message" role="status" aria-live="polite" hidden></p>
+        <p class="muted small" id="preprocess-details">选择实际采集日期；关键词留空可合并该日全部原始 CSV。</p>
+        <div class="stats-grid compact"><article class="stat-card"><div>处理前记录数</div><strong data-value="before_count">—</strong></article><article class="stat-card"><div>处理后记录数</div><strong data-value="after_count">—</strong></article><article class="stat-card"><div>移除重复记录</div><strong data-value="removed_duplicates">—</strong></article></div>
+        <article class="panel"><div class="panel-heading"><h2>清洗结果预览</h2><span class="chart-tag">CSV / MySQL / HDFS</span></div><div class="table-wrap" tabindex="0" aria-label="清洗结果表格"><table><thead><tr><th>视频标题</th><th>视频 URL</th><th>UP 主</th><th>播放量</th><th>点赞数</th><th>投币数</th><th>收藏数</th><th>转发数</th></tr></thead><tbody id="preprocess-rows"></tbody></table></div></article>
+      </section>
+
+      <section class="page-section" id="page-mining" aria-label="数据挖掘" hidden>
+        <div class="tabs" role="tablist" aria-label="数据挖掘功能"><button id="tab-clusters" role="tab" aria-selected="true" aria-controls="mining-clusters" data-tab="clusters" class="active">聚类结果</button><button id="tab-predict" role="tab" aria-selected="false" aria-controls="mining-predict" data-tab="predict" tabindex="-1">爆款预测</button><button id="tab-rules" role="tab" aria-selected="false" aria-controls="mining-rules" data-tab="rules" tabindex="-1">关联规则</button></div>
+        <p class="message" id="mining-message" role="status" aria-live="polite" hidden></p>
+        <div id="mining-clusters" role="tabpanel" aria-labelledby="tab-clusters">
+          <div class="section-toolbar"><div><h2>K-Means 视频聚类</h2><span class="muted small">按播放与互动指标划分视频热度</span></div><div class="button-group"><button class="button" id="load-clusters">读取结果</button><button class="button primary" id="train-model">训练聚类模型 →</button></div></div>
+          <div class="chart-grid"><article class="panel"><div class="panel-heading"><h3>肘部法选择 K 值</h3><span class="chart-tag">K / SSE</span></div><div id="chart-elbow" class="chart-slot" role="img" aria-label="聚类肘部法曲线"></div></article><article class="panel"><div class="panel-heading"><h3>视频热度分布</h3><span class="muted small">最优 K：<strong data-value="optimal_k">—</strong></span></div><div id="chart-clusters" class="chart-slot" role="img" aria-label="视频聚类分布"></div></article></div>
+          <article class="panel"><div class="panel-heading"><h3>视频聚类明细</h3></div><div class="table-wrap" tabindex="0" aria-label="视频聚类明细表格"><table><thead><tr><th>视频标题</th><th>播放量</th><th>点赞数</th><th>投币数</th><th>收藏数</th><th>转发数</th><th>聚类</th><th>热度类别</th></tr></thead><tbody id="cluster-rows"></tbody></table></div></article>
+        </div>
+        <div id="mining-predict" role="tabpanel" aria-labelledby="tab-predict" hidden><div class="two-column"><article class="panel"><div class="panel-heading"><h2>输入视频特征</h2><span class="tag">K-Means</span></div><p class="panel-description">使用已训练模型判断视频热度，请输入纯数字。</p><form id="predict-form" class="form-grid"><div><label for="feature-play">播放量</label><input id="feature-play" name="play" type="number" min="0" step="1" required placeholder="请输入播放次数"></div><div><label for="feature-like">点赞数</label><input id="feature-like" name="like" type="number" min="0" step="1" required placeholder="请输入点赞数量"></div><div><label for="feature-coin">投币数</label><input id="feature-coin" name="coin" type="number" min="0" step="1" required placeholder="请输入投币数量"></div><div><label for="feature-favorite">收藏数</label><input id="feature-favorite" name="favorite" type="number" min="0" step="1" required placeholder="请输入收藏数量"></div><div><label for="feature-share">转发数</label><input id="feature-share" name="share" type="number" min="0" step="1" required placeholder="请输入转发数量"></div><div class="form-action"><button class="button primary" type="submit">预测视频热度 →</button></div></form></article><article class="panel prediction-panel"><span class="eyebrow">PREDICTION</span><h2>视频热度判断</h2><div id="prediction-result" class="result-empty">输入五项特征后开始预测</div><p class="muted small">结果基于聚类模型，仅表示数据特征对应的热度类别。</p></article></div></div>
+        <div id="mining-rules" role="tabpanel" aria-labelledby="tab-rules" hidden><article class="panel"><div class="panel-heading"><div><h2>互动行为关联规则</h2><p class="panel-description">挖掘点赞、投币、收藏和转发之间的关联。</p></div><button class="button primary" id="load-rules">加载关联规则 →</button></div><div class="table-wrap" tabindex="0" aria-label="关联规则表格"><table><thead><tr><th>前项</th><th>后项</th><th>支持度</th><th>置信度</th><th>提升度</th></tr></thead><tbody id="rule-rows"></tbody></table></div></article></div>
+      </section>
+
+      <section class="page-section" id="page-knowledge" aria-label="AI 知识库" hidden>
+        <article class="panel knowledge-banner"><div class="knowledge-title"><span class="ai-mark"><svg class="icon"><use href="#icon-ai"/></svg></span><div><h2>让数据回答你的问题 <span class="tag">选做</span></h2><p class="muted">基于采集 CSV 的本地 RAG · LangChain + Ollama</p></div></div><div class="button-group"><span id="knowledge-status" class="status-badge">尚未连接知识库</span><button class="button primary" id="build-knowledge">构建知识库 →</button></div></article>
+        <p class="message" id="knowledge-message" role="status" aria-live="polite" hidden></p>
+        <article class="panel question-panel"><div class="panel-heading"><h2>数据问答</h2><span class="chart-tag">qwen2.5:1.5b-instruct</span></div><p class="panel-description">围绕当前日期与关键词的数据提问。</p><div class="suggestions"><button type="button" data-question="哪个 UP 主的视频最多？">哪个 UP 主的视频最多？ ↗</button><button type="button" data-question="播放量最高的视频是哪个？">播放量最高的视频是哪个？ ↗</button><button type="button" data-question="哪些视频的点赞和投币最高？">哪些视频的点赞和投币最高？ ↗</button></div><form id="question-form"><label for="question">你的问题</label><textarea id="question" name="question" rows="3" maxlength="2000" placeholder="输入关于视频数据的问题…" required></textarea><div class="question-action"><span class="muted small">回答以所选数据为依据</span><button class="button primary" type="submit">发送问题 ↑</button></div></form><div class="answer-heading"><svg class="icon"><use href="#icon-ai"/></svg><h3>知识库回答</h3></div><div id="knowledge-answer" class="answer-box" aria-live="polite">尚无回答，请先构建知识库并提交问题。</div></article>
+      </section>
+      <footer class="content-footer"><span>BiliScope · 大数据开发综合实践</span><span>数据驱动洞察 / 本地前端预览</span></footer>
+    </main>
+  </div>
+</body>
+</html>
