@@ -10,6 +10,7 @@ from selenium.common.exceptions import WebDriverException
 from pachong import collect_videos
 from preprocessing import preprocess_data
 from spark_analysis import analyze_data
+from machine_kmeans import train_models, get_clusters, predict_video, get_rules
 
 app = Flask(__name__)
 # 当前仅在本机提供采集预览，防止通过其他域名访问本地服务。
@@ -84,7 +85,7 @@ def start_collection():
         return jsonify(success=False, message="采集日期请使用 YYYY-MM-DD 格式。"), 400
     with collection_lock:
         if preprocessing_lock.locked():
-            return jsonify(success=False, message="正在预处理或分析数据，请稍后再采集。"), 409
+            return jsonify(success=False, message="已有数据任务正在运行，请稍后再采集。"), 409
         if collection_job["state"] in ("running", "stopping"):
             return jsonify(success=False, message="已有采集任务正在运行，请等待当前任务结束。"), 409
         collection_job.clear()
@@ -135,7 +136,7 @@ def preprocess():
     if not isinstance(data, dict) or not isinstance(data.get("date"), str) or not isinstance(data.get("keyword", ""), str):
         return jsonify(success=False, message="请提供采集日期和关键词。"), 400
     if not preprocessing_lock.acquire(blocking=False):
-        return jsonify(success=False, message="已有预处理或分析正在运行，请稍候。"), 409
+        return jsonify(success=False, message="已有数据任务正在运行，请稍候。"), 409
     try:
         with collection_lock:
             if collection_job["state"] in ("running", "stopping"):
@@ -165,7 +166,7 @@ def analysis():
         return jsonify(success=False, message="请使用 YYYY-MM-DD 日期，关键词不超过 100 个字符。"), 400
     # 与预处理共用锁，避免读表时同一批数据正在被替换。
     if not preprocessing_lock.acquire(blocking=False):
-        return jsonify(success=False, message="正在预处理或分析，请稍后再试。"), 409
+        return jsonify(success=False, message="已有数据任务正在运行，请稍候。"), 409
     try:
         result = analyze_data(collection_date, keyword)
         return jsonify(success=True, message="Spark 分析完成。", data=result)
@@ -173,6 +174,48 @@ def analysis():
         return jsonify(success=False, message=str(error)), 400
     except Exception:
         return jsonify(success=False, message="Spark 分析失败，请检查 Java 17、JDBC 驱动及 MySQL 连接配置。"), 500
+    finally:
+        preprocessing_lock.release()
+
+
+@app.post("/api/mining/train")
+@app.get("/api/mining/clusters")
+@app.post("/api/mining/predict")
+@app.get("/api/mining/rules")
+def mining():
+    if request.method == "POST":
+        if request.headers.get("Origin") not in (None, request.host_url.rstrip("/")):
+            return jsonify(success=False, message="请从本机管理页面发起请求。"), 403
+        if not request.is_json:
+            return jsonify(success=False, message="请求必须使用 JSON。"), 415
+        data = request.get_json(silent=True)
+    else:
+        data = request.args
+    if not isinstance(data, dict) or not isinstance(data.get("date"), str) or not isinstance(data.get("keyword", ""), str):
+        return jsonify(success=False, message="请提供采集日期和关键词。"), 400
+    collection_date, keyword = data["date"], data.get("keyword", "").strip()
+    try:
+        if date.fromisoformat(collection_date).isoformat() != collection_date or len(keyword) > 100:
+            raise ValueError
+    except ValueError:
+        return jsonify(success=False, message="请使用 YYYY-MM-DD 日期，关键词不超过 100 个字符。"), 400
+    # 训练会更新数据库，和预处理、分析共用现有锁即可。
+    if not preprocessing_lock.acquire(blocking=False):
+        return jsonify(success=False, message="已有数据任务正在运行，请稍候。"), 409
+    try:
+        action = request.path.rsplit("/", 1)[-1]
+        if action == "predict":
+            result = predict_video(collection_date, keyword, data)
+        else:
+            operation = {"train": train_models, "clusters": get_clusters, "rules": get_rules}[action]
+            result = operation(collection_date, keyword)
+        message = {"train": "训练完成，聚类结果已写入 MySQL。", "clusters": "已读取该批次聚类结果。",
+                   "predict": "视频热度预测完成。", "rules": "关联规则计算完成。"}[action]
+        return jsonify(success=True, message=message, data=result)
+    except ValueError as error:
+        return jsonify(success=False, message=str(error)), 400
+    except Exception:
+        return jsonify(success=False, message="数据挖掘未完成，请检查 MySQL 连接和本地 models 目录；模型异常时请重新训练。"), 500
     finally:
         preprocessing_lock.release()
 

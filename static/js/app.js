@@ -2,7 +2,7 @@
 window.apiRequest = async function (path, method = 'GET', data = {}) {
   const controller = new AbortController();
   // 首次 Spark 分析需要启动 JVM；采集仍通过短请求查询进度。
-  const timeout = setTimeout(() => controller.abort(), path === '/analysis' ? 120000 : path === '/preprocess' ? 60000 : 20000);
+  const timeout = setTimeout(() => controller.abort(), ['/analysis', '/mining/train'].includes(path) ? 120000 : path === '/preprocess' ? 60000 : 20000);
   try {
     const options = {method, credentials: 'same-origin', signal: controller.signal, headers: {Accept: 'application/json'}};
     let url = `/api${path}`;
@@ -112,6 +112,7 @@ if (document.querySelector('[data-dashboard]')) {
     table('preprocess-rows', [], videoKeys);
     $('preprocess-details').textContent = '选择实际采集日期；关键词留空可合并该日全部原始 CSV。';
     table('cluster-rows', [], ['title', 'play', 'like', 'coin', 'favorite', 'share', 'cluster', 'label']);
+    $('cluster-details').textContent = '关键词留空使用当日合并清洗表；请先训练，再读取结果或预测。';
     table('rule-rows', [], ['antecedents', 'consequents', 'support', 'confidence', 'lift']);
     $('prediction-result').textContent = '输入五项特征后开始预测';
     $('prediction-result').className = 'result-empty';
@@ -142,7 +143,7 @@ if (document.querySelector('[data-dashboard]')) {
     if (button.disabled) return;
     if (!$('filter-date').reportValidity()) return;
     const keyword = filters.keyword.trim();
-    if (!keyword && !['/preprocess', '/analysis'].includes(path)) {
+    if (!keyword && !['/preprocess', '/analysis'].includes(path) && !path.startsWith('/mining/')) {
       message(target, '请先填写数据关键词，以确定要操作的数据范围。', 'warning');
       $('filter-keyword').focus();
       return;
@@ -327,6 +328,7 @@ if (document.querySelector('[data-dashboard]')) {
     return data.after_count > 0 || data.rows?.length > 0;
   }));
   function renderClusters(data) {
+    $('cluster-details').textContent = `已训练 ${data.video_count} 条视频；明细最多预览 20 条，完整聚类结果已写入 MySQL。`;
     metric('optimal_k', data.optimal_k);
     charts.clusters(data);
     table('cluster-rows', data.rows, ['title', 'play', 'like', 'coin', 'favorite', 'share', 'cluster', 'label']);

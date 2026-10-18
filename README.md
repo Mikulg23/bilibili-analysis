@@ -2,7 +2,7 @@
 
 本项目对应“大数据开发综合实践”中的“基于多技术栈的数据分析与 AI 知识库构建”实训，围绕 B 站视频数据完成采集、清洗、分布式存储、统计分析、数据挖掘和 Web 可视化。AI 知识库问答为选做模块。
 
-**当前状态：已完成深色后台前端、模块一数据采集、模块二数据预处理和模块三 Spark 分析。** 清洗模块支持本地 CSV、本机 MySQL 和虚拟机 HDFS 存储，分析结果通过 Flask 接口展示为四类 ECharts 图表；数据挖掘、真实管理员鉴权及 AI 问答尚未实现。页面不会生成演示数据或模拟业务成功。
+**当前状态：已完成深色后台前端、模块一数据采集、模块二数据预处理、模块三 Spark 分析和模块四数据挖掘。** 清洗模块支持本地 CSV、本机 MySQL 和虚拟机 HDFS 存储，分析结果通过 Flask 接口展示为四类 ECharts 图表；真实管理员鉴权及 AI 问答尚未实现。页面不会生成演示数据或模拟业务成功。
 
 ## 本地预览
 
@@ -25,7 +25,7 @@
 - `/dashboard` 当前公开用于本地预览，**没有访问保护**；服务只监听本机回环地址，不作为生产服务部署。
 - 采用 HTML、CSS、原生 JavaScript，无前端编译步骤。ECharts 5.6.0 通过固定版本 CDN 加载，需要网络；加载失败时显示提示，其余界面仍可使用。
 - 默认日期为浏览器本地日期的前一天。先填写关键词，再执行相应模块操作；日期和关键词变化会清空旧结果，旧请求返回后也不会覆盖新范围。
-- 数据采集、预处理、Spark 分析已接入实际接口，其余未实现接口的 404/405 仍显示“接口尚未接入”。采集期间锁定日期、关键词及采集按钮；执行预处理前先停止采集。
+- 数据采集、预处理、Spark 分析、数据挖掘已接入实际接口，其余未实现接口的 404/405 仍显示“接口尚未接入”。采集期间锁定日期、关键词及采集按钮；执行预处理前先停止采集。
 
 ## 模块一 数据采集
 
@@ -131,17 +131,21 @@ bilibili-analysis/
 │   ├── raw/                   # 本地原始 CSV
 │   └── processed/             # 清洗后的 CSV，后续上传 HDFS
 ├── models/
-│   ├── cluster_model.pkl      # 训练后生成，当前不存在
-│   └── scaler.pkl             # 训练后生成，当前不存在
+│   └── 批次表名/              # 训练后生成，按日期和关键词隔离
+│       ├── cluster_model.pkl  # 聚类模型及标签、批次信息
+│       └── scaler.pkl         # 标准化器及训练编号
 ├── sql/
-│   └── init.sql               # MySQL 建库、建表和用户表
+│   └── init.sql               # MySQL 建库及清洗数据表模板
 ├── scripts/
 │   ├── init_hdfs.sh           # 初始化 HDFS 目录
 │   └── run_spark.sh           # 启动 Spark 任务
 ├── logs/                      # 运行日志
 ├── tests/
+│   ├── test_collection.py     # 采集状态与停止自检
 │   ├── test_preprocessing.py  # 数据清洗测试
-│   └── test_database.py       # 数据库操作测试
+│   ├── test_database.py       # 数据库操作测试
+│   ├── test_spark_analysis.py # 四项 Spark 统计自检
+│   └── test_mining.py         # 聚类、预测、规则与批次自检
 ├── .env.example               # 环境变量示例，仅放占位值
 ├── .gitignore                 # Git 忽略规则
 ├── requirements.txt           # Python 依赖清单
@@ -220,6 +224,29 @@ Spark 3.5 支持 Java 8/11/17，当前选择 17，详见 [Spark 官方说明](ht
 
 `GET /api/analysis?date=YYYY-MM-DD&keyword=` 返回下文约定的五个结果字段。日期必须为标准格式，关键词最多 100 字。首次分析超时上限 120 秒；超时不代表服务端计算已取消，可稍后重新加载。使用 `.venv/Scripts/python.exe tests/test_spark_analysis.py` 可运行小规模计算自检，不连接 MySQL、不更改业务数据。
 
+## 模块四 数据挖掘
+
+`machine_kmeans.py` 使用 Pandas 组织本机 MySQL 清洗表数据，调用现有 scikit-learn、mlxtend 和 joblib，无新增依赖。
+
+### 页面操作
+
+1. 重启 `app.py`，进入“数据挖掘”，选择完成预处理的日期。关键词留空使用当日合并表，填写关键词使用对应单关键词表。
+2. 在“聚类结果”点击“训练聚类模型”。训练完成后展示肘部法曲线、各簇数量和最多 20 条明细，完整结果保存到对应 MySQL 表的 `cluster`、`label` 列；已有表会自动补这两列。
+3. 重新打开页面可点击“读取结果”，无需再次训练。
+4. 切到“爆款预测”，按播放量、点赞数、投币数、收藏数、转发数输入五项非负整数，使用该批次已训练模型得到热度类别。
+5. 切到“关联规则”点击“加载关联规则”。此项直接读取清洗数据计算，无需先训练 K-Means。
+
+### 计算口径与保存
+
+- K-Means 固定使用 `play, like, coin, favorite, share` 顺序，先用 StandardScaler 标准化；随机种子 42，每个 K 初始化 10 次。
+- K 从 1 到 `min(10, 不同特征组合数)`，归一化 K 与 SSE，选择曲线到首尾连线距离最大的肘点；不足两组不同特征时拒绝训练，无明显肘点时使用 K=2。
+- 对各簇中心的五项标准化特征求均值，最高的簇标为“高热度（爆款候选）”，其他簇为“普通热度”。爆款候选表示相对于本批次的热度类别。
+- 模型按 `models/批次表名/cluster_model.pkl`、`scaler.pkl` 分别保存。模型文件包含训练对象及必要的标签、肘部曲线、批次数据签名和训练编号；预测会核对模型、标准化器编号和当前数据。重新预处理清空聚类列、数据变化或模型文件缺失后，需要重新训练。
+- Apriori 每个视频一笔交易。点赞、投币、收藏、转发分别高于本批次中位数且大于零时记为“高点赞”“高投币”“高收藏”“高转发”。支持度至少 0.1、置信度至少 0.6、提升度至少 1，按置信度、提升度、支持度降序展示。没有满足条件的规则时返回空列表。
+- 训练只更新聚类列，保留原始八个字段；与预处理、统计分析共用现有互斥锁。模型文件被 Git 忽略，换电脑后重新训练即可，只加载本项目自行生成的模型。
+
+可运行 `.venv/Scripts/python.exe tests/test_mining.py` 做小规模自检，不读写真实 MySQL。训练请求上限 120 秒，超时不会取消后台计算，可稍后点击“读取结果”。
+
 ## 功能约束
 
 ### 统计分析
@@ -238,8 +265,8 @@ Spark 3.5 支持 Java 8/11/17，当前选择 17，详见 [Spark 官方说明](ht
 - K-Means 只允许使用播放量、点赞数、投币数、收藏数、转发数等数值特征，禁止传入标题、URL、UP 主等文本。
 - 使用肘部法确定 K 值，划分视频热度类别，并将聚类结果更新到 MySQL。
 - 前端支持输入特征值，使用训练完成的模型进行爆款预测；该结果是基于聚类的热度判断。
-- 训练和预测必须保持特征顺序及标准化方式一致；标准化器与聚类模型分别保存为 `scaler.pkl` 和 `cluster_model.pkl`。
-- Apriori 挖掘点赞、投币、收藏、转发之间的关联规则，并展示到前端；数值指标转为交易项的规则需在实现时明确。
+- 训练和预测必须保持特征顺序及标准化方式一致；标准化器与聚类模型分别保存在 `models/批次表名/scaler.pkl` 和 `models/批次表名/cluster_model.pkl`。
+- Apriori 挖掘点赞、投币、收藏、转发之间的关联规则，并展示到前端；以每个视频为一笔交易，高于该批次中位数且大于零的互动指标转成对应“高互动”项。
 
 ### 权限与日期
 
@@ -266,7 +293,7 @@ Spark 3.5 支持 Java 8/11/17，当前选择 17，详见 [Spark 官方说明](ht
 
 `requirements.txt` 已包含 Flask、环境变量读取、MySQL 连接、Selenium、Pandas/NumPy、PySpark 3.5、K-Means/Apriori 和 APScheduler 所需的 Python 依赖，使用项目的 Python 3.11 虚拟环境安装。`PyMySQL[rsa]` 包含 MySQL 密码认证所需组件。当前暂不开发本地 AI，未加入 LangChain、Ollama 或向量库依赖。
 
-当前已验证 Chrome/ChromeDriver、本机 MySQL、虚拟机 HDFS 及 Spark JDBC 分析。Java 使用兼容的 17 版本，MySQL Connector/J 固定为 8.4.0；Python 依赖不增加。挖掘、AI、定时任务和真实鉴权仍未实现。
+当前已验证 Chrome/ChromeDriver、本机 MySQL、虚拟机 HDFS 及 Spark JDBC 分析。Java 使用兼容的 17 版本，MySQL Connector/J 固定为 8.4.0；Python 依赖不增加。AI、定时任务和真实鉴权仍未实现。
 
 验收至少覆盖：登录与角色权限、2000 条数据采集、HDFS 写入、清洗及 MySQL 写入、四类图表、聚类结果、爆款预测、关联规则、日期切换和自动采集。选做 AI 模块完成后再验证问答。报告中应提供实现说明、运行截图和测试用例，不将未验证的功能标记为完成。
 
@@ -274,7 +301,7 @@ Spark 3.5 支持 Java 8/11/17，当前选择 17，详见 [Spark 官方说明](ht
 
 请求统一发送到同源 `/api`，POST 使用 `Content-Type: application/json`，GET 使用查询参数。响应使用 JSON：`{ "success": true, "message": "说明", "data": {} }`；业务失败设置 `success: false` 并返回 `message`。HTTP 401 表示未登录，403 表示无权限，404/405 表示当前接口尚未接入。
 
-除登录、退出、采集状态及停止请求外，数据请求携带 `date`（`YYYY-MM-DD`）与 `keyword`。预处理允许关键词为空，表示合并该日期全部原始 CSV；分析允许关键词为空，表示读取该日期的合并清洗表。其他业务仍要求关键词非空。以下列出额外请求字段及成功响应的 `data` 字段，字段名与现有前端保持一致。
+除登录、退出、采集状态及停止请求外，数据请求携带 `date`（`YYYY-MM-DD`）与 `keyword`。预处理允许关键词为空，表示合并该日期全部原始 CSV；分析允许关键词为空，表示读取该日期的合并清洗表。数据挖掘同样允许关键词为空，使用合并清洗表。其他业务仍要求关键词非空。以下列出额外请求字段及成功响应的 `data` 字段，字段名与现有前端保持一致。
 
 | 方法与路径 | 额外请求字段 | 返回 data |
 | --- | --- | --- |
@@ -285,7 +312,7 @@ Spark 3.5 支持 Java 8/11/17，当前选择 17，详见 [Spark 官方说明](ht
 | `POST /api/collect/stop` | 仅 `task_id`，不携带筛选字段 | 返回停止中的任务状态；已结束任务保持原状态 |
 | `POST /api/preprocess` | 无；关键词可留空 | `before_count`, `after_count`, `removed_duplicates`, `rows`，以及清洗和存储状态 |
 | `GET /api/analysis` | 无 | `summary`, `top10_play`, `interaction_ratio`, `title_len_play`, `like_coin_scatter` |
-| `POST /api/mining/train` | 无 | `optimal_k`, `elbow`, `distribution`, `rows` |
+| `POST /api/mining/train` | 无 | `optimal_k`, `elbow`, `distribution`, `rows`, `video_count` |
 | `GET /api/mining/clusters` | 无 | 同训练结果 |
 | `POST /api/mining/predict` | `play`, `like`, `coin`, `favorite`, `share`（均为非负整数） | `label`（非空热度判断文字） |
 | `GET /api/mining/rules` | 无 | `rules`（规则数组） |
@@ -305,7 +332,7 @@ Spark 3.5 支持 Java 8/11/17，当前选择 17，详见 [Spark 官方说明](ht
 
 采集任务数据包含 `task_id`、`state`（`running` / `stopping` / `stopped` / `completed` / `error`）、`date`、`keyword`、`page`、`pages`、`count`（文件累计条数）、`new_count`、`failed_count`、`filename`、`rows`（最多 20 条）和 `message`。状态查询没有筛选参数，返回本进程当前任务。已有任务运行或正在停止时重复启动返回 HTTP 409；停止请求必须匹配当前任务编号，避免停止错误的任务。
 
-列表无数据时返回空数组，图表坐标无数据时返回两个空数组，不使用虚构记录填充。采集已使用任务状态查询，其余接口仍按一次请求返回最终结果预留，普通请求超时为 20 秒，Spark 分析为 120 秒（首次需启动 JVM）；后续训练与知识库任务接入时再决定其耗时处理方式。
+列表无数据时返回空数组，图表坐标无数据时返回两个空数组，不使用虚构记录填充。采集已使用任务状态查询，其余接口按一次请求返回最终结果，普通请求超时为 20 秒，Spark 分析和 K-Means 训练为 120 秒（Spark 首次需启动 JVM）；知识库接入时再决定其耗时处理方式。
 
 预处理额外返回 `source_files`、`invalid_urls`、`filled_numeric_cells`、`clipped_outlier_cells`、`filename`、`table_name`、`mysql_status`、`hdfs_status` 和 `storage_complete`。本地清洗成功但外部存储未完成时仍返回清洗结果，并将 `storage_complete` 设为 `false`，前端使用警告样式；预处理请求超时单独设为 60 秒。
 

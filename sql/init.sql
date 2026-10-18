@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS `video_data_template` (
     `coin` BIGINT UNSIGNED NOT NULL DEFAULT 0,
     `favorite` BIGINT UNSIGNED NOT NULL DEFAULT 0,
     `share` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    `cluster` INT NULL,
+    `label` VARCHAR(32) NULL,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY `uq_video_url` (`url`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
