@@ -124,7 +124,7 @@ def upload_to_hdfs(path):
             raise RuntimeError("HDFS 文件大小校验失败。")
     return remote_path
 
-
+#  数据预处理 clean_dataframe（）
 def preprocess_data(collection_date, keyword=""):
     batch_date = date.fromisoformat(collection_date)
     if collection_date != batch_date.isoformat():
@@ -145,6 +145,7 @@ def preprocess_data(collection_date, keyword=""):
         if not set(FIELDS).issubset(frame.columns):
             raise ValueError("有原始 CSV 缺少必需字段，请检查表头。")
         frames.append(frame[FIELDS])
+        # 采集日期和关键词不一致的文件会被忽略，但仍会参与去重。
     cleaned, result = clean_dataframe(pd.concat(frames, ignore_index=True))
     if cleaned.empty:
         raise ValueError("清洗后没有有效视频，未覆盖已有清洗文件或数据库表。")

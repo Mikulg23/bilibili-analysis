@@ -8,6 +8,8 @@ load_dotenv(BASE_DIR / ".env")
 
 RAW_DATA_DIR = BASE_DIR / "data" / "raw"
 PROCESSED_DATA_DIR = BASE_DIR / "data" / "processed"
+SPARK_JAVA_HOME = os.getenv("SPARK_JAVA_HOME", "")
+MYSQL_JDBC_JAR = Path(os.getenv("MYSQL_JDBC_JAR") or str(BASE_DIR / "jars" / "mysql-connector-j-8.4.0.jar"))
 MYSQL_HOST = os.getenv("MYSQL_HOST", "127.0.0.1")
 MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
 MYSQL_USER = os.getenv("MYSQL_USER", "")

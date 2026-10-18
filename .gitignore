@@ -1,4 +1,7 @@
 .venv/
+jars/*.jar
+artifacts/
+spark-warehouse/
 __pycache__/
 *.py[cod]
 .env

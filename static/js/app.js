@@ -1,8 +1,8 @@
 // 预留 API 统一使用同源地址；这里不模拟任何业务结果。
 window.apiRequest = async function (path, method = 'GET', data = {}) {
   const controller = new AbortController();
-  // 清洗还包含存储写入，留出 60 秒；采集任务仍通过短请求查询进度。
-  const timeout = setTimeout(() => controller.abort(), path === '/preprocess' ? 60000 : 20000);
+  // 首次 Spark 分析需要启动 JVM；采集仍通过短请求查询进度。
+  const timeout = setTimeout(() => controller.abort(), path === '/analysis' ? 120000 : path === '/preprocess' ? 60000 : 20000);
   try {
     const options = {method, credentials: 'same-origin', signal: controller.signal, headers: {Accept: 'application/json'}};
     let url = `/api${path}`;
@@ -142,7 +142,7 @@ if (document.querySelector('[data-dashboard]')) {
     if (button.disabled) return;
     if (!$('filter-date').reportValidity()) return;
     const keyword = filters.keyword.trim();
-    if (!keyword && path !== '/preprocess') {
+    if (!keyword && !['/preprocess', '/analysis'].includes(path)) {
       message(target, '请先填写数据关键词，以确定要操作的数据范围。', 'warning');
       $('filter-keyword').focus();
       return;

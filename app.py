@@ -6,8 +6,10 @@ from uuid import uuid4
 from flask import Flask, jsonify, redirect, render_template, request, url_for
 from selenium.common.exceptions import WebDriverException
 
+# 数据采集和预处理
 from pachong import collect_videos
 from preprocessing import preprocess_data
+from spark_analysis import analyze_data
 
 app = Flask(__name__)
 # 当前仅在本机提供采集预览，防止通过其他域名访问本地服务。
@@ -59,7 +61,7 @@ def dashboard():
     # 当前仅提供本地前端预览，业务接口接入时必须补充服务端鉴权。
     return render_template("index.html")
 
-
+# 校验参数、创建后台线程、启动采集
 @app.post("/api/collect")
 def start_collection():
     # 不接受其他网页发起的采集请求，也不允许表单跨站提交。
@@ -82,7 +84,7 @@ def start_collection():
         return jsonify(success=False, message="采集日期请使用 YYYY-MM-DD 格式。"), 400
     with collection_lock:
         if preprocessing_lock.locked():
-            return jsonify(success=False, message="正在预处理数据，请稍后再采集。"), 409
+            return jsonify(success=False, message="正在预处理或分析数据，请稍后再采集。"), 409
         if collection_job["state"] in ("running", "stopping"):
             return jsonify(success=False, message="已有采集任务正在运行，请等待当前任务结束。"), 409
         collection_job.clear()
@@ -96,7 +98,7 @@ def start_collection():
     Thread(target=run_collection, args=(keyword.strip(), pages, collection_date), daemon=True).start()
     return jsonify(success=True, message="采集任务已启动。", data=snapshot), 202
 
-
+#  设置停止事件，停止当前采集任务
 @app.post("/api/collect/stop")
 def stop_collection():
     if request.headers.get("Origin") not in (None, request.host_url.rstrip("/")):
@@ -122,7 +124,7 @@ def collection_status():
         snapshot = dict(collection_job)
     return jsonify(success=True, message="当前采集状态。", data=snapshot)
 
-#数据预处理
+#数据预处理 函数preprocess_data（）
 @app.post("/api/preprocess")
 def preprocess():
     if request.headers.get("Origin") not in (None, request.host_url.rstrip("/")):
@@ -133,11 +135,12 @@ def preprocess():
     if not isinstance(data, dict) or not isinstance(data.get("date"), str) or not isinstance(data.get("keyword", ""), str):
         return jsonify(success=False, message="请提供采集日期和关键词。"), 400
     if not preprocessing_lock.acquire(blocking=False):
-        return jsonify(success=False, message="已有预处理正在运行，请稍候。"), 409
+        return jsonify(success=False, message="已有预处理或分析正在运行，请稍候。"), 409
     try:
         with collection_lock:
             if collection_job["state"] in ("running", "stopping"):
                 return jsonify(success=False, message="请先停止数据采集，再执行预处理。"), 409
+            # 预处理会覆盖已有清洗文件和数据库表，需谨慎操作。
         result = preprocess_data(data["date"], data.get("keyword", ""))
         message = f"本地清洗完成：{result['before_count']} → {result['after_count']} 条。{result['mysql_status']}；{result['hdfs_status']}"
         return jsonify(success=True, message=message, data=result)
@@ -147,6 +150,29 @@ def preprocess():
         return jsonify(success=False, message="CSV 读写失败，请检查文件是否被占用及目录权限，原始数据未修改。"), 500
     except Exception:
         return jsonify(success=False, message="预处理未完成，原始数据已保留，请检查 CSV 格式与存储配置。"), 500
+    finally:
+        preprocessing_lock.release()
+
+
+@app.get("/api/analysis")
+def analysis():
+    collection_date = request.args.get("date", "")
+    keyword = request.args.get("keyword", "").strip()
+    try:
+        if date.fromisoformat(collection_date).isoformat() != collection_date or len(keyword) > 100:
+            raise ValueError
+    except ValueError:
+        return jsonify(success=False, message="请使用 YYYY-MM-DD 日期，关键词不超过 100 个字符。"), 400
+    # 与预处理共用锁，避免读表时同一批数据正在被替换。
+    if not preprocessing_lock.acquire(blocking=False):
+        return jsonify(success=False, message="正在预处理或分析，请稍后再试。"), 409
+    try:
+        result = analyze_data(collection_date, keyword)
+        return jsonify(success=True, message="Spark 分析完成。", data=result)
+    except ValueError as error:
+        return jsonify(success=False, message=str(error)), 400
+    except Exception:
+        return jsonify(success=False, message="Spark 分析失败，请检查 Java 17、JDBC 驱动及 MySQL 连接配置。"), 500
     finally:
         preprocessing_lock.release()
 

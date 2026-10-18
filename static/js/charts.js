@@ -54,7 +54,7 @@ window.DashboardCharts = (() => {
     draw('chart-top10', {
       grid: {left: 10, right: 35, top: 10, bottom: 5, containLabel: true},
       xAxis: axis('value'),
-      yAxis: {...axis('category'), inverse: true, data: (top.titles || []).map(title => String(title).slice(0, 12)), axisLabel: {width: 100, overflow: 'truncate', fontSize: 10, color: '#8b9bb2'}},
+      yAxis: {...axis('category'), inverse: true, data: top.titles || [], axisLabel: {width: 100, overflow: 'truncate', fontSize: 10, color: '#8b9bb2'}},
       series: [{type: 'bar', data: top.values || [], barMaxWidth: 12, itemStyle: {borderRadius: [0, 3, 3, 0]}}]
     }, Array.isArray(top.titles) && top.titles.length > 0);
     draw('chart-interaction', {
