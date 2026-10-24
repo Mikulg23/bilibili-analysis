@@ -2,7 +2,8 @@
 window.apiRequest = async function (path, method = 'GET', data = {}) {
   const controller = new AbortController();
   // 首次 Spark 分析需要启动 JVM；采集仍通过短请求查询进度。
-  const timeout = setTimeout(() => controller.abort(), ['/analysis', '/mining/train'].includes(path) ? 120000 : path === '/preprocess' ? 60000 : 20000);
+  const timeoutMs = path === '/knowledge/build' ? 600000 : path === '/knowledge/ask' ? 240000 : ['/analysis', '/mining/train'].includes(path) ? 120000 : path === '/preprocess' ? 60000 : 20000;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const options = {method, credentials: 'same-origin', signal: controller.signal, headers: {Accept: 'application/json'}};
     let url = `/api${path}`;
@@ -116,7 +117,9 @@ if (document.querySelector('[data-dashboard]')) {
     table('rule-rows', [], ['antecedents', 'consequents', 'support', 'confidence', 'lift']);
     $('prediction-result').textContent = '输入五项特征后开始预测';
     $('prediction-result').className = 'result-empty';
-    $('knowledge-status').textContent = '尚未连接知识库';
+    $('knowledge-status').textContent = '选择批次后构建知识库';
+    $('knowledge-sources').replaceChildren();
+    $('knowledge-method').textContent = '';
     $('knowledge-answer').textContent = '尚无回答，请先构建知识库并提交问题。';
     for (const id of ['analysis', 'collect', 'preprocess', 'mining', 'knowledge']) message(`${id}-message`, '');
   }
@@ -143,7 +146,7 @@ if (document.querySelector('[data-dashboard]')) {
     if (button.disabled) return;
     if (!$('filter-date').reportValidity()) return;
     const keyword = filters.keyword.trim();
-    if (!keyword && !['/preprocess', '/analysis'].includes(path) && !path.startsWith('/mining/')) {
+    if (!keyword && !['/preprocess', '/analysis'].includes(path) && !path.startsWith('/mining/') && !path.startsWith('/knowledge/')) {
       message(target, '请先填写数据关键词，以确定要操作的数据范围。', 'warning');
       $('filter-keyword').focus();
       return;
@@ -153,7 +156,7 @@ if (document.querySelector('[data-dashboard]')) {
     const label = button.textContent;
     button.disabled = true;
     button.textContent = '请求中…';
-    message(target, '正在请求服务，请稍候…');
+    message(target, path === '/knowledge/build' ? '正在构建知识库，首次向量计算可能需要数分钟，请保持页面打开…' : '正在请求服务，请稍候…');
     try {
       const result = await apiRequest(path, method, {date: filters.date, keyword, ...extra});
       if (version !== contextVersion) return;
@@ -353,6 +356,9 @@ if (document.querySelector('[data-dashboard]')) {
   $('build-knowledge').addEventListener('click', event => run(event.currentTarget, 'knowledge-message', '/knowledge/build', 'POST', {}, data => {
     if (typeof data.status !== 'string' || !data.status.trim()) throw new Error('接口未返回知识库状态。');
     $('knowledge-status').textContent = data.status;
+    $('knowledge-answer').textContent = `当前知识库包含 ${data.document_count} 条资料，来源：${data.filename}。可以开始提问。`;
+    $('knowledge-sources').replaceChildren();
+    $('knowledge-method').textContent = '';
   }));
   document.querySelectorAll('[data-question]').forEach(button => button.addEventListener('click', () => {
     $('question').value = button.dataset.question;
@@ -365,6 +371,27 @@ if (document.querySelector('[data-dashboard]')) {
     run(event.currentTarget.querySelector('[type="submit"]'), 'knowledge-message', '/knowledge/ask', 'POST', {question}, data => {
       if (typeof data.answer !== 'string' || !data.answer.trim()) throw new Error('接口尚未返回回答。');
       $('knowledge-answer').textContent = data.answer;
+      $('knowledge-status').textContent = '知识库已就绪';
+      $('knowledge-method').textContent = `提问：${question} · ${data.method === 'statistics' ? '依据：当前批次全量统计' : '依据：相关记录检索与本地模型'} · ${data.filename}`;
+      const sources = $('knowledge-sources');
+      sources.replaceChildren();
+      for (const [index, source] of (data.sources || []).entries()) {
+        const item = document.createElement('li');
+        const label = `[${index + 1}] ${source.title} · UP主：${source.up}`;
+        item.textContent = label;
+        try {
+          const url = new URL(source.url);
+          if (url.protocol === 'https:' && (url.hostname === 'bilibili.com' || url.hostname.endsWith('.bilibili.com'))) {
+            const link = document.createElement('a');
+            link.href = url.href;
+            link.textContent = label;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            item.replaceChildren(link);
+          }
+        } catch { /* 无效链接只展示文本。 */ }
+        sources.append(item);
+      }
     });
   });
   $('logout-button').addEventListener('click', async event => {

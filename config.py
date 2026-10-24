@@ -9,6 +9,10 @@ load_dotenv(BASE_DIR / ".env")
 RAW_DATA_DIR = BASE_DIR / "data" / "raw"
 PROCESSED_DATA_DIR = BASE_DIR / "data" / "processed"
 MODELS_DIR = BASE_DIR / "models"
+KNOWLEDGE_DIR = BASE_DIR / "data" / "knowledge"
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b-instruct")
+OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "bge-m3")
 SPARK_JAVA_HOME = os.getenv("SPARK_JAVA_HOME", "")
 MYSQL_JDBC_JAR = Path(os.getenv("MYSQL_JDBC_JAR") or str(BASE_DIR / "jars" / "mysql-connector-j-8.4.0.jar"))
 MYSQL_HOST = os.getenv("MYSQL_HOST", "127.0.0.1")

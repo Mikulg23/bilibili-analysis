@@ -11,6 +11,10 @@ from pachong import collect_videos
 from preprocessing import preprocess_data
 from spark_analysis import analyze_data
 from machine_kmeans import train_models, get_clusters, predict_video, get_rules
+from AI_Knowledge import build_knowledge, ask_knowledge
+from httpx import ConnectError, TimeoutException
+from ollama import ResponseError
+from config import OLLAMA_MODEL
 
 app = Flask(__name__)
 # 当前仅在本机提供采集预览，防止通过其他域名访问本地服务。
@@ -60,7 +64,7 @@ def login():
 @app.get("/dashboard")
 def dashboard():
     # 当前仅提供本地前端预览，业务接口接入时必须补充服务端鉴权。
-    return render_template("index.html")
+    return render_template("index.html", config_model=OLLAMA_MODEL)
 
 # 校验参数、创建后台线程、启动采集
 @app.post("/api/collect")
@@ -216,6 +220,46 @@ def mining():
         return jsonify(success=False, message=str(error)), 400
     except Exception:
         return jsonify(success=False, message="数据挖掘未完成，请检查 MySQL 连接和本地 models 目录；模型异常时请重新训练。"), 500
+    finally:
+        preprocessing_lock.release()
+
+
+@app.post("/api/knowledge/build")
+@app.post("/api/knowledge/ask")
+def knowledge():
+    if request.headers.get("Origin") not in (None, request.host_url.rstrip("/")):
+        return jsonify(success=False, message="请从本机管理页面发起请求。"), 403
+    if not request.is_json:
+        return jsonify(success=False, message="请求必须使用 JSON。"), 415
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get("date"), str) or not isinstance(data.get("keyword", ""), str):
+        return jsonify(success=False, message="请提供采集日期和关键词。"), 400
+    collection_date, keyword = data["date"], data.get("keyword", "").strip()
+    try:
+        if date.fromisoformat(collection_date).isoformat() != collection_date or len(keyword) > 100:
+            raise ValueError
+    except ValueError:
+        return jsonify(success=False, message="请使用 YYYY-MM-DD 日期，关键词不超过 100 个字符。"), 400
+    if not preprocessing_lock.acquire(blocking=False):
+        return jsonify(success=False, message="已有数据任务正在运行，请稍候。"), 409
+    try:
+        if request.path.endswith("/build"):
+            result = build_knowledge(collection_date, keyword)
+            message = f"{result['status']}，共 {result['document_count']} 条视频资料。"
+        else:
+            result = ask_knowledge(collection_date, keyword, data.get("question"))
+            message = "回答完成，可查看下方数据来源。"
+        return jsonify(success=True, message=message, data=result)
+    except (ConnectError, ConnectionError):
+        return jsonify(success=False, message="无法连接本机 Ollama，请先启动 Ollama。"), 503
+    except TimeoutException:
+        return jsonify(success=False, message="本地模型响应超时，请等待模型加载完成后重试。"), 504
+    except ResponseError:
+        return jsonify(success=False, message="Ollama 模型调用失败，请检查模型是否已下载、名称是否正确及内存是否充足。"), 503
+    except ValueError as error:
+        return jsonify(success=False, message=str(error)), 400
+    except Exception:
+        return jsonify(success=False, message="知识库操作未完成，请检查清洗 CSV 和 data/knowledge 目录；原数据未修改。"), 500
     finally:
         preprocessing_lock.release()
 

@@ -2,7 +2,7 @@
 
 本项目对应“大数据开发综合实践”中的“基于多技术栈的数据分析与 AI 知识库构建”实训，围绕 B 站视频数据完成采集、清洗、分布式存储、统计分析、数据挖掘和 Web 可视化。AI 知识库问答为选做模块。
 
-**当前状态：已完成深色后台前端、模块一数据采集、模块二数据预处理、模块三 Spark 分析和模块四数据挖掘。** 清洗模块支持本地 CSV、本机 MySQL 和虚拟机 HDFS 存储，分析结果通过 Flask 接口展示为四类 ECharts 图表；真实管理员鉴权及 AI 问答尚未实现。页面不会生成演示数据或模拟业务成功。
+**当前状态：已完成深色后台前端、模块一数据采集、模块二数据预处理、模块三 Spark 分析、模块四数据挖掘和模块五本地 RAG 问答。** 清洗模块支持本地 CSV、本机 MySQL 和虚拟机 HDFS 存储，分析结果通过 Flask 接口展示为四类 ECharts 图表；真实管理员鉴权与自动采集尚未实现。页面不会生成演示数据或模拟业务成功。
 
 ## 本地预览
 
@@ -25,7 +25,7 @@
 - `/dashboard` 当前公开用于本地预览，**没有访问保护**；服务只监听本机回环地址，不作为生产服务部署。
 - 采用 HTML、CSS、原生 JavaScript，无前端编译步骤。ECharts 5.6.0 通过固定版本 CDN 加载，需要网络；加载失败时显示提示，其余界面仍可使用。
 - 默认日期为浏览器本地日期的前一天。先填写关键词，再执行相应模块操作；日期和关键词变化会清空旧结果，旧请求返回后也不会覆盖新范围。
-- 数据采集、预处理、Spark 分析、数据挖掘已接入实际接口，其余未实现接口的 404/405 仍显示“接口尚未接入”。采集期间锁定日期、关键词及采集按钮；执行预处理前先停止采集。
+- 数据采集、预处理、Spark 分析、数据挖掘、本地知识库已接入实际接口，其余未实现接口的 404/405 仍显示“接口尚未接入”。采集期间锁定日期、关键词及采集按钮；执行预处理前先停止采集。
 
 ## 模块一 数据采集
 
@@ -129,7 +129,8 @@ bilibili-analysis/
 │       └── charts.js          # ECharts 图表渲染
 ├── data/
 │   ├── raw/                   # 本地原始 CSV
-│   └── processed/             # 清洗后的 CSV，后续上传 HDFS
+│   ├── processed/             # 清洗 CSV，同步 HDFS 和 MySQL
+│   └── knowledge/             # 本地向量索引，建库后生成且不提交 Git
 ├── models/
 │   └── 批次表名/              # 训练后生成，按日期和关键词隔离
 │       ├── cluster_model.pkl  # 聚类模型及标签、批次信息
@@ -145,7 +146,8 @@ bilibili-analysis/
 │   ├── test_preprocessing.py  # 数据清洗测试
 │   ├── test_database.py       # 数据库操作测试
 │   ├── test_spark_analysis.py # 四项 Spark 统计自检
-│   └── test_mining.py         # 聚类、预测、规则与批次自检
+│   ├── test_mining.py         # 聚类、预测、规则与批次自检
+│   └── test_knowledge.py      # 建库、检索、统计及索引失效自检
 ├── .env.example               # 环境变量示例，仅放占位值
 ├── .gitignore                 # Git 忽略规则
 ├── requirements.txt           # Python 依赖清单
@@ -165,7 +167,7 @@ bilibili-analysis/
 | 机器学习 | scikit-learn、mlxtend、joblib | scikit-learn 实现 K-Means，mlxtend 实现 Apriori，joblib 保存及加载模型 |
 | 后端 | Flask | 提供登录鉴权、角色权限控制和业务接口；计划监听 5002 端口 |
 | 前端 | HTML、CSS、原生 JavaScript、ECharts | 页面放在 templates，静态资源放在 static，通过接口获取图表数据 |
-| AI 问答（选做） | LangChain、Ollama | 基于采集数据构建本地 RAG；手册指定模型为 qwen2.5:1.5b-instruct |
+| AI 问答（选做） | LangChain、Ollama | 基于采集数据构建本地 RAG；当前问答模型为 qwen2.5:1.5b-instruct，嵌入模型为 bge-m3 |
 | 定时任务 | scheduler.py | 实现每日凌晨自动采集；具体调度方式待实现时确定 |
 
 支持 Windows / Linux；手册推荐在 Linux 环境完成 Hadoop 和 Spark 实验。Java、MySQL 驱动等配套组件的具体版本，应在实现时按选定的 Hadoop、Spark 版本确定。
@@ -180,7 +182,7 @@ Selenium 采集 → data/raw/ 原始 CSV → Pandas 清洗
                                       └── 写入本机 MySQL
                                              ├── PySpark 统计 → Flask → ECharts
                                              └── K-Means / Apriori → Flask → 页面
-原始 CSV → 本地 RAG 知识库 → Ollama → 问答页面（选做）
+清洗 CSV → 本地 RAG 知识库 → Ollama → 问答页面（选做）
 ```
 
 - 至少采集 2000 条视频，字段包括视频标题、视频 URL、UP 主、播放量、点赞数、投币数、收藏数、转发数。
@@ -277,7 +279,24 @@ Spark 3.5 支持 Java 8/11/17，当前选择 17，详见 [Spark 官方说明](ht
 
 ### AI 知识库（选做）
 
-基于采集的 CSV、LangChain 和 Ollama 本地模型构建 RAG 问答，支持查询 UP 主视频数量、播放量最高的视频及高互动视频等问题。检索、嵌入和切分方案待实现时确定；回答应以所选数据为依据。
+本机已安装 Ollama，程序位于 `D:\Ollama\app`，模型保存在 `D:\Ollama\models`；Windows 用户环境变量 `OLLAMA_MODELS` 已设置为该模型目录。问答模型 `qwen2.5:1.5b-instruct` 约 986 MB，嵌入模型 `bge-m3` 约 1.16 GB。模型保存在项目之外，不提交 Git。
+
+项目连接配置已加入 `config.py` 和 `.env.example`：`OLLAMA_BASE_URL=http://127.0.0.1:11434`、`OLLAMA_MODEL=qwen2.5:1.5b-instruct`、`OLLAMA_EMBED_MODEL=bge-m3`。Ollama 是独立服务，项目 `.env` 不控制已经启动的 Ollama 进程；修改模型存储目录后需要重启 Ollama。
+
+重启电脑后可从开始菜单启动 Ollama；服务未运行时，也可在 PowerShell 执行 `& 'D:\Ollama\app\ollama.exe' serve`，保持该终端打开。新终端执行 `ollama list` 可以查看已下载的模型。知识库接口已使用 LangChain 的 Ollama 集成，安装项目依赖后即可使用。
+
+本机已通过问答模型中文输出、GPU 加载及 BGE-M3 的 1024 维文本向量生成检查。知识库使用当前批次清洗 CSV，每条视频作为一份 LangChain Document，16 条一批生成向量；归一化向量与文档元数据共同保存为 data/knowledge/批次表名.npz。使用 NumPy 余弦检索，不安装额外向量数据库，也不使用 pickle 加载索引。
+
+使用步骤：先启动 Ollama，再重启 `app.py`，进入“AI 知识库”，选择已经预处理的采集日期。关键词留空使用当日合并 CSV，点击“构建知识库”；完成后即可点击示例问题或输入问题提问。相同 CSV 和嵌入模型配置可复用索引，重启 Flask 不需要重新计算向量。已验证的完整批次为 2026-10-16，共 2331 条，首次构建约 58 秒。
+
+- “哪个 UP 主的视频最多？”“播放量最高的视频是哪个？”“哪些视频的点赞和投币最高？”使用全量 CSV 做确定性统计。高互动口径为点赞与投币之和；最高值并列时说明并列总数，最多展示 5 条。另支持“有多少条视频？”和“总播放量是多少？”。这些结果不经过模型改写。
+- 其他问题将问题向量与索引做余弦比较，取分数不低于 0.35 的前 5 条，使用 LangChain 提示词与本机问答模型回答。回答下方展示检索到的记录和视频链接，可对照核查；索引只包含标题、UP 主和数值指标，没有视频正文。
+- CSV 或嵌入模型名称变化后，旧索引会被拒用，请重新建库。若覆盖了同名嵌入模型，或索引文件损坏，请先删除对应的 `data/knowledge/批次表名.npz` 再构建。
+- 建库成功后才原子替换旧文件，失败保留旧索引，源 CSV 和数据库不修改。建库、问答与现有数据任务互斥。页面切换批次会清空旧回答和引用，旧请求也不会覆盖新批次。
+- 本机模型请求绕过系统代理，限制连接回环地址；生成和嵌入调用关闭 LangSmith 云端追踪。问题和原始记录不写入日志。
+- 建库请求上限 600 秒、问答上限 240 秒，首次加载可能较慢；页面超时不会取消后台计算。再次构建会复用已完成的有效索引。无需同时启动 Spark 或重新采集数据。
+
+运行 `.venv/Scripts/python.exe tests/test_knowledge.py` 可做不调用真实模型的轻量自检。真实批次已通过建库、索引复用、示例统计问答和带来源的模型问答接口检查；本轮未进行浏览器交互复测。
 
 ## 配置与隐私约束
 
@@ -291,17 +310,17 @@ Spark 3.5 支持 Java 8/11/17，当前选择 17，详见 [Spark 官方说明](ht
 
 建议按“环境配置与数据库 → 采集 → 清洗 → Spark 分析 → 数据挖掘 → Flask 与前端 → 定时任务 → 选做 AI 问答”的顺序实现。
 
-`requirements.txt` 已包含 Flask、环境变量读取、MySQL 连接、Selenium、Pandas/NumPy、PySpark 3.5、K-Means/Apriori 和 APScheduler 所需的 Python 依赖，使用项目的 Python 3.11 虚拟环境安装。`PyMySQL[rsa]` 包含 MySQL 密码认证所需组件。当前暂不开发本地 AI，未加入 LangChain、Ollama 或向量库依赖。
+`requirements.txt` 已包含 Flask、环境变量读取、MySQL 连接、Selenium、Pandas/NumPy、PySpark 3.5、K-Means/Apriori 和 APScheduler 所需的 Python 依赖，使用项目的 Python 3.11 虚拟环境安装。`PyMySQL[rsa]` 包含 MySQL 密码认证所需组件。模块五新增 langchain-ollama、langchain-core 和 httpx[socks]；SOCKS 支持用于兼容系统代理环境，本机模型请求仍明确绕过代理。未安装额外向量数据库。
 
-当前已验证 Chrome/ChromeDriver、本机 MySQL、虚拟机 HDFS 及 Spark JDBC 分析。Java 使用兼容的 17 版本，MySQL Connector/J 固定为 8.4.0；Python 依赖不增加。AI、定时任务和真实鉴权仍未实现。
+当前已验证 Chrome/ChromeDriver、本机 MySQL、虚拟机 HDFS 及 Spark JDBC 分析。Java 使用兼容的 17 版本，MySQL Connector/J 固定为 8.4.0；模块五模型调用与知识库已接入。定时任务和真实鉴权仍未实现。
 
-验收至少覆盖：登录与角色权限、2000 条数据采集、HDFS 写入、清洗及 MySQL 写入、四类图表、聚类结果、爆款预测、关联规则、日期切换和自动采集。选做 AI 模块完成后再验证问答。报告中应提供实现说明、运行截图和测试用例，不将未验证的功能标记为完成。
+验收至少覆盖：登录与角色权限、2000 条数据采集、HDFS 写入、清洗及 MySQL 写入、四类图表、聚类结果、爆款预测、关联规则、日期切换和自动采集。AI 问答已做本地接口联调，浏览器交互仍可按页面操作步骤复核。报告中应提供实现说明、运行截图和测试用例，不将未验证的功能标记为完成。
 
 ## 前端预留 API
 
 请求统一发送到同源 `/api`，POST 使用 `Content-Type: application/json`，GET 使用查询参数。响应使用 JSON：`{ "success": true, "message": "说明", "data": {} }`；业务失败设置 `success: false` 并返回 `message`。HTTP 401 表示未登录，403 表示无权限，404/405 表示当前接口尚未接入。
 
-除登录、退出、采集状态及停止请求外，数据请求携带 `date`（`YYYY-MM-DD`）与 `keyword`。预处理允许关键词为空，表示合并该日期全部原始 CSV；分析允许关键词为空，表示读取该日期的合并清洗表。数据挖掘同样允许关键词为空，使用合并清洗表。其他业务仍要求关键词非空。以下列出额外请求字段及成功响应的 `data` 字段，字段名与现有前端保持一致。
+除登录、退出、采集状态及停止请求外，数据请求携带 `date`（`YYYY-MM-DD`）与 `keyword`。预处理允许关键词为空，表示合并该日期全部原始 CSV；分析允许关键词为空，表示读取该日期的合并清洗表。数据挖掘同样允许关键词为空，使用合并清洗表。知识库也允许关键词为空，使用合并清洗 CSV。采集关键词仍须非空。以下列出额外请求字段及成功响应的 `data` 字段，字段名与现有前端保持一致。
 
 | 方法与路径 | 额外请求字段 | 返回 data |
 | --- | --- | --- |
@@ -316,8 +335,8 @@ Spark 3.5 支持 Java 8/11/17，当前选择 17，详见 [Spark 官方说明](ht
 | `GET /api/mining/clusters` | 无 | 同训练结果 |
 | `POST /api/mining/predict` | `play`, `like`, `coin`, `favorite`, `share`（均为非负整数） | `label`（非空热度判断文字） |
 | `GET /api/mining/rules` | 无 | `rules`（规则数组） |
-| `POST /api/knowledge/build` | 无 | `status`（非空状态文字） |
-| `POST /api/knowledge/ask` | `question`（非空文字） | `answer`（非空回答文字） |
+| `POST /api/knowledge/build` | 无 | `status`, `document_count`, `filename` |
+| `POST /api/knowledge/ask` | `question`（1–2000 字符） | `answer`, `sources`, `method`, `filename` |
 
 返回数据结构约定：
 
@@ -332,7 +351,7 @@ Spark 3.5 支持 Java 8/11/17，当前选择 17，详见 [Spark 官方说明](ht
 
 采集任务数据包含 `task_id`、`state`（`running` / `stopping` / `stopped` / `completed` / `error`）、`date`、`keyword`、`page`、`pages`、`count`（文件累计条数）、`new_count`、`failed_count`、`filename`、`rows`（最多 20 条）和 `message`。状态查询没有筛选参数，返回本进程当前任务。已有任务运行或正在停止时重复启动返回 HTTP 409；停止请求必须匹配当前任务编号，避免停止错误的任务。
 
-列表无数据时返回空数组，图表坐标无数据时返回两个空数组，不使用虚构记录填充。采集已使用任务状态查询，其余接口按一次请求返回最终结果，普通请求超时为 20 秒，Spark 分析和 K-Means 训练为 120 秒（Spark 首次需启动 JVM）；知识库接入时再决定其耗时处理方式。
+列表无数据时返回空数组，图表坐标无数据时返回两个空数组，不使用虚构记录填充。采集已使用任务状态查询，其余接口按一次请求返回最终结果，普通请求超时为 20 秒，Spark 分析和 K-Means 训练为 120 秒（Spark 首次需启动 JVM）；知识库构建上限为 600 秒、问答为 240 秒。超时不会取消服务端任务，可稍后重试，已有有效索引会被复用。
 
 预处理额外返回 `source_files`、`invalid_urls`、`filled_numeric_cells`、`clipped_outlier_cells`、`filename`、`table_name`、`mysql_status`、`hdfs_status` 和 `storage_complete`。本地清洗成功但外部存储未完成时仍返回清洗结果，并将 `storage_complete` 设为 `false`，前端使用警告样式；预处理请求超时单独设为 60 秒。
 

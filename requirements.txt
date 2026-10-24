@@ -12,3 +12,8 @@ mlxtend==0.23.4
 joblib==1.6.0
 
 APScheduler==3.11.3
+
+# Local RAG; SOCKS support is needed when the system defines a SOCKS proxy.
+langchain-ollama==1.1.0
+langchain-core==1.7.0
+httpx[socks]==0.28.1
